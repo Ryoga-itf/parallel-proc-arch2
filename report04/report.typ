@@ -1,5 +1,6 @@
 #import "../template.typ": *
 #import "@preview/tenv:0.1.2": parse_dotenv
+#import "@preview/timeliney:0.4.0"
 
 #let env = parse_dotenv(read("../.env"))
 
@@ -41,11 +42,10 @@
 
 p.6 の表を参考に、新しい 1 ベクトルのタイミングを表にすると @t1 のようになる。
 
-#show table: set text(size: 0.55em)
 #figure(
   table(
-    columns: 3,
-    align: (left, left, auto, auto),
+    columns: 4,
+    align: (left, left, left, left),
     table.hline(),
     table.header([命令], [], [開始時間], [完了時間]),
     table.hline(),
@@ -58,5 +58,79 @@ p.6 の表を参考に、新しい 1 ベクトルのタイミングを表にす�
   ),
   caption: [DAXPY on DLXV のタイミング],
 ) <t1>
+
+#timeliney.timeline(
+  show-grid: false,
+  tasks-vline: false,
+  milestone-line-style: (stroke: (paint: gray, dash: "dashed")),
+  {
+    import timeliney: *
+      
+    headerline(([時間], 228))
+  
+    taskgroup({
+      task(
+        "LV", 
+        (from: 0, to: 12, style: (stroke: 2pt + luma(20%))),
+        (from: 12, to: 76, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "MULTV",
+        (from: 12, to: 12+7, style: (stroke: 2pt + luma(20%))),
+        (from: 12+7, to: 83, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "LV",
+        (from: 76, to: 76+12, style: (stroke: 2pt + luma(20%))),
+        (from: 76+12, to: 152, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "ADDV",
+        (from: 88, to: 88+6, style: (stroke: 2pt + luma(20%))),
+        (from: 88+6, to: 158, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "SV",
+        (from: 152, to: 152+12, style: (stroke: 2pt + luma(20%))),
+        (from: 152+12, to: 228, style: (stroke: 2pt + luma(70%))),
+      )
+    })
+
+    milestone(at: 0, "")
+    milestone(at: 12, "")
+
+    milestone(at: 76, "")
+    milestone(at: 94, "")
+
+    milestone(at: 152, "")
+    milestone(at: 158, "")
+  }
+)
+
+以上より、
+
+$
+T_"start" = 228 - 64 times T_"element" = 228 - 192 = 36
+$
+
+これを性能式に代入すると、
+
+$
+T_n
+  &= T_"base" + ceil(n / "MVL") times (T_"loop" + T_"start") + n times T_"element" \
+  &= 10 + ceil(n / 64) times (18 + 36) + 3 n
+$
+
+よって、スライド中の $R_infinity$ の求め方と同様にして、
+
+$
+lim_(n -> infinity) T_n / n = 3 + (18 + 36) / 64 = 3.84375
+$
+
+よって、スライド中同様に 80MHz を代入することで、
+
+$
+R_infinity = (2 times 80) / 3.84375 approx 41.6 "MFLOPS"
+$
 
 == lane を導入し、各々のベクトル演算が1/2 の時間で終わると仮定したときの 1 イタレーションの実行時間
