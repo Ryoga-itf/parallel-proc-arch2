@@ -206,6 +206,8 @@ p.6 の表を参考に、タイミングを表にすると @t2 のようにな�
 
 == さらにロードストアパイプを6本に増やしたときの 1イタレーション時間
 
+この問題では、ADDV と SV もチェイニング不可であるという前提で解いた。
+
 課題文の定義より「1本のロードストアパイプは 1cycle あたり 1スカラ値」を扱える。
 6 本に増やした場合、ロードストアの転送部は6並列になる。
 
@@ -282,6 +284,199 @@ $ceil(64/6) = 11$ であるから p.6 の表を参考に、タイミングを表
 
 === $R_infinity$ の値
 
+表は、LV/SV の $12$ を $76$ に書き換えれば進められる。 
+ADDV-SV 間の 4cycles のストールも維持する。
+
+p.6 の表を参考に、タイミングを表にすると @t4 のようになる。
+
+#figure(
+  table(
+    columns: 4,
+    align: (left, left, left, left),
+    table.hline(),
+    table.header([命令], [], [開始時間], [完了時間]),
+    table.hline(),
+    [LV]   , [V1, Rx]    , [$1$]           , [$76+64=140$],
+    [MULTV], [a, V1]     , [$76+1=77$]     , [$76+7+64=147$],
+    [LV]   , [V2, Ry]    , [$140+1=141$]   , [$140+76+64=280$],
+    [ADDV] , [V3, V1, V2], [$140+76+1=217$], [$216+6+64=286$],
+    [SV]   , [Ry, V3]    , [$286+4+1=291$] , [$290+76+64=430$],
+    table.hline(),
+  ),
+  caption: [DAXPY on DLXV のタイミング],
+) <t4>
+
+#timeliney.timeline(
+  show-grid: false,
+  tasks-vline: false,
+  milestone-line-style: (stroke: (paint: gray, dash: "dashed")),
+  {
+    import timeliney: *
+      
+    headerline(([時間], 430))
+  
+    taskgroup({
+      task(
+        "LV", 
+        (from: 0, to: 76, style: (stroke: 2pt + luma(20%))),
+        (from: 76, to: 140, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "MULTV",
+        (from: 76, to: 76+7, style: (stroke: 2pt + luma(20%))),
+        (from: 76+7, to: 147, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "LV",
+        (from: 140, to: 140+76, style: (stroke: 2pt + luma(20%))),
+        (from: 140+76, to: 280, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "ADDV",
+        (from: 216, to: 216+6, style: (stroke: 2pt + luma(20%))),
+        (from: 216+6, to: 286, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "SV",
+        (from: 290, to: 290+76, style: (stroke: 2pt + luma(20%))),
+        (from: 290+76, to: 430, style: (stroke: 2pt + luma(70%))),
+      )
+    })
+
+    milestone(at: 0, "")
+    milestone(at: 76, "")
+
+    milestone(at: 140, "")
+    milestone(at: 216+6, "")
+
+    milestone(at: 286, "")
+    milestone(at: 290+76, "")
+  }
+)
+
+以上より、
+
+$
+T_"start" = 430 - 64 times T_"element" = 430 - 192 = 238
+$
+
+これを性能式に代入すると、
+
+$
+T_n
+  &= T_"base" + ceil(n / "MVL") times (T_"loop" + T_"start") + n times T_"element" \
+  &= 10 + ceil(n / 64) times (18 + 238) + 3 n
+$
+
+よって、スライド中の $R_infinity$ の求め方と同様にして、
+
+$
+lim_(n -> infinity) T_n / n = 3 + (18 + 238) / 64 = 7
+$
+
+よって、スライド中同様に 80MHz を代入することで、
+
+$
+R_infinity = (2 times 80) / 7 approx 22.9 "MFLOPS"
+$
+
 === ロード・ストアパイプを3本に増やした場合の $R_infinity$ の値
 
+load/load は 3 本パイプにより隠蔽できるが、store は add の後にしか走れないため、これは重ならない。
+したがって、定常的には $T_"element" = 2$
+
+p.6 の表を参考に、タイミングを表にすると @t5 のようになる。
+
+#figure(
+  table(
+    columns: 4,
+    align: (left, left, left, left),
+    table.hline(),
+    table.header([命令], [], [開始時間], [完了時間]),
+    table.hline(),
+    [LV]   , [V1, Rx]    , [$1$]           , [$76+64=140$],
+    [MULTV], [a, V1]     , [$76+1=77$]     , [$76+7+64=147$],
+    [LV]   , [V2, Ry]    , [$3$]           , [$2+76+64=142$],
+    [ADDV] , [V3, V1, V2], [$77+7=84$]     , [$83+6+64=153$],
+    [SV]   , [Ry, V3]    , [$153+4+1=158$] , [$157+76+64=297$],
+    table.hline(),
+  ),
+  caption: [DAXPY on DLXV のタイミング],
+) <t5>
+
+#timeliney.timeline(
+  show-grid: false,
+  tasks-vline: false,
+  milestone-line-style: (stroke: (paint: gray, dash: "dashed")),
+  {
+    import timeliney: *
+      
+    headerline(([時間], 297))
+  
+    taskgroup({
+      task(
+        "LV", 
+        (from: 0, to: 76, style: (stroke: 2pt + luma(20%))),
+        (from: 76, to: 140, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "MULTV",
+        (from: 76, to: 76+7, style: (stroke: 2pt + luma(20%))),
+        (from: 76+7, to: 147, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "LV",
+        (from: 2, to: 2+76, style: (stroke: 2pt + luma(20%))),
+        (from: 2+76, to: 142, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "ADDV",
+        (from: 83, to: 83+6, style: (stroke: 2pt + luma(20%))),
+        (from: 83+6, to: 153, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "SV",
+        (from: 157, to: 157+76, style: (stroke: 2pt + luma(20%))),
+        (from: 157+76, to: 297, style: (stroke: 2pt + luma(70%))),
+      )
+    })
+
+    milestone(at: 0, "")
+    milestone(at: 76, "")
+  }
+)
+
+以上より、
+
+$
+T_"start" = 297 - 64 times T_"element" = 297 - 128 = 169
+$
+
+これを性能式に代入すると、
+
+$
+T_n
+  &= T_"base" + ceil(n / "MVL") times (T_"loop" + T_"start") + n times T_"element" \
+  &= 10 + ceil(n / 64) times (18 + 169) + 2 n
+$
+
+よって、スライド中の $R_infinity$ の求め方と同様にして、
+
+$
+lim_(n -> infinity) T_n / n = 2 + (18 + 169) / 64 = 4.921875
+$
+
+よって、スライド中同様に 80MHz を代入することで、
+
+$
+R_infinity = (2 times 80) / 4.921875 approx 32.5  "MFLOPS"
+$
+
 === さらにロード・ストアパイプを増やすことによって、性能を向上できるか
+
+load は十分増やすと隠せるが、最終的に演算と store が直列になり、$T_"element" >= 2$ を下回れない。
+逆に、p.13 の理想ケースのように load/load/store を同時進行できて $T_"element"=1$ まで落ちるなら、そこから先は、演算側が下限になり、やはりパイプを増やしても $T_"element" < 1$ にはならず、$R_infinity$ は飽和すると考えられる。
+
+また、レイテンシが 76 のように巨大だと、$"MVL" = 64$ では、$(T_"loop" + T_"start") \/ "MVL"$ が聞き続けるため、パイプ増設だけではレイテンシ起因の低下は解決しないと考えられる。
+
+よって、頭打ちであるといえる。
