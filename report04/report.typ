@@ -134,3 +134,154 @@ R_infinity = (2 times 80) / 3.84375 approx 41.6 "MFLOPS"
 $
 
 == lane を導入し、各々のベクトル演算が1/2 の時間で終わると仮定したときの 1 イタレーションの実行時間
+
+Lane 導入により、ベクトル演算の実行時間が 1/2 の時間で終わるということは、$n = 32$ 相当になる。
+ロードストアパイプは 1 本のままなため、$n = 64$ 相当のままである。
+
+p.6 の表を参考に、タイミングを表にすると @t2 のようになる。
+
+#figure(
+  table(
+    columns: 4,
+    align: (left, left, left, left),
+    table.hline(),
+    table.header([命令], [], [開始時間], [完了時間]),
+    table.hline(),
+    [LV]   , [V1, Rx]    , [$1$]         , [$12+64=76$],
+    [MULTV], [a, V1]     , [$12+1=13$]   , [$12+7+64=83$],
+    [LV]   , [V2, Ry]    , [$76+1=77$]   , [$76+12+64=152$],
+    [ADDV] , [V3, V1, V2], [$76+12+1=89$], [$88+6+32=126$],
+    [SV]   , [Ry, V3]    , [$152+1=153$] , [$152+12+64=228$],
+    table.hline(),
+  ),
+  caption: [DAXPY on DLXV のタイミング],
+) <t2>
+
+#timeliney.timeline(
+  show-grid: false,
+  tasks-vline: false,
+  milestone-line-style: (stroke: (paint: gray, dash: "dashed")),
+  {
+    import timeliney: *
+      
+    headerline(([時間], 228))
+  
+    taskgroup({
+      task(
+        "LV", 
+        (from: 0, to: 12, style: (stroke: 2pt + luma(20%))),
+        (from: 12, to: 76, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "MULTV",
+        (from: 12, to: 12+7, style: (stroke: 2pt + luma(20%))),
+        (from: 12+7, to: 83, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "LV",
+        (from: 76, to: 76+12, style: (stroke: 2pt + luma(20%))),
+        (from: 76+12, to: 152, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "ADDV",
+        (from: 88, to: 88+6, style: (stroke: 2pt + luma(20%))),
+        (from: 88+6, to: 126, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "SV",
+        (from: 152, to: 152+12, style: (stroke: 2pt + luma(20%))),
+        (from: 152+12, to: 228, style: (stroke: 2pt + luma(70%))),
+      )
+    })
+
+    milestone(at: 0, "")
+    milestone(at: 12, "")
+
+    milestone(at: 76, "")
+    milestone(at: 94, "")
+  }
+)
+
+よって、228 cycles が答え。
+
+== さらにロードストアパイプを6本に増やしたときの 1イタレーション時間
+
+課題文の定義より「1本のロードストアパイプは 1cycle あたり 1スカラ値」を扱える。
+6 本に増やした場合、ロードストアの転送部は6並列になる。
+
+$ceil(64/6) = 11$ であるから p.6 の表を参考に、タイミングを表にすると @t3 のようになる。
+
+#figure(
+  table(
+    columns: 4,
+    align: (left, left, left, left),
+    table.hline(),
+    table.header([命令], [], [開始時間], [完了時間]),
+    table.hline(),
+    [LV]   , [V1, Rx]    , [$1$]         , [$12+11=23$],
+    [MULTV], [a, V1]     , [$12+1=13$]   , [$12+7+32=51$],
+    [LV]   , [V2, Ry]    , [$23+1=24$]   , [$23+12+11=46$],
+    [ADDV] , [V3, V1, V2], [$24+12=36$]  , [$35+6+32=73$],
+    [SV]   , [Ry, V3]    , [$73+4+1=78$] , [$77+12+11=100$],
+    table.hline(),
+  ),
+  caption: [DAXPY on DLXV のタイミング],
+) <t3>
+
+#timeliney.timeline(
+  show-grid: false,
+  tasks-vline: false,
+  milestone-line-style: (stroke: (paint: gray, dash: "dashed")),
+  {
+    import timeliney: *
+      
+    headerline(([時間], 100))
+  
+    taskgroup({
+      task(
+        "LV", 
+        (from: 0, to: 12, style: (stroke: 2pt + luma(20%))),
+        (from: 12, to: 23, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "MULTV",
+        (from: 12, to: 12+7, style: (stroke: 2pt + luma(20%))),
+        (from: 12+7, to: 51, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "LV",
+        (from: 23, to: 23+12, style: (stroke: 2pt + luma(20%))),
+        (from: 23+12, to: 46, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "ADDV",
+        (from: 35, to: 35+6, style: (stroke: 2pt + luma(20%))),
+        (from: 35+6, to: 73, style: (stroke: 2pt + luma(70%))),
+      )
+      task(
+        "SV",
+        (from: 77, to: 77+12, style: (stroke: 2pt + luma(20%))),
+        (from: 77+12, to: 100, style: (stroke: 2pt + luma(70%))),
+      )
+    })
+
+    milestone(at: 0, "")
+    milestone(at: 12, "")
+
+    milestone(at: 23, "")
+    milestone(at: 41, "")
+
+    milestone(at: 73, "")
+    milestone(at: 89, "")
+  }
+)
+
+よって、100 cycles が答え。
+
+== ロード・ストアのレイテンシが大幅に増大し、76 になった場合
+
+=== $R_infinity$ の値
+
+=== ロード・ストアパイプを3本に増やした場合の $R_infinity$ の値
+
+=== さらにロード・ストアパイプを増やすことによって、性能を向上できるか
